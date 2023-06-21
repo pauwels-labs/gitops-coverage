@@ -3,12 +3,27 @@ const fs = require("fs");
 const readline = require("readline");
 
 // Paths to the files we'll need to compute coverage summary
-const jsonSummaryFilePath = "./coverage/coverage-summary.json"
-const lcovInfoFilePath = "./coverage/lcov.info"
+let jsonSummaryFilePath = process.env["GITOPS_COVERAGE_JSON_SUMMARY_FILE_PATH"];
+if (!jsonSummaryFilePath) {
+  jsonSummaryFilePath = "./coverage/coverage-summary.json";
+}
+
+let lcovInfoFilePath = process.env["GITOPS_COVERAGE_LCOV_INFO_FILE_PATH"];
+if (!lcovInfoFilePath) {
+  lcovInfoFilePath = "./coverage/lcov.info";
+}
+
+let projectPath = process.env["GITOPS_COVERAGE_PROJECT_PATH"];
+if (!projectPath) {
+  projectPath = __dirname;
+}
+projectPath.replace(/\/+$/, "");
+
+let outputFile = process.env["GITOPS_COVERAGE_OUTPUT_FILE"];
 
 // Load the json summary into native JSON
 let jsonSummary = Object.fromEntries(
-  Object.entries(require(jsonSummaryFilePath)).map(([k, v]) => [k.replace(__dirname + "/", ""), v])
+  Object.entries(require(jsonSummaryFilePath)).map(([k, v]) => [k.replace(projectPath + "/", ""), v])
 );
 
 try {
@@ -108,8 +123,19 @@ try {
 <summary>Code coverage summary</summary>
 
 ${table}
-</details>`;
-    console.log(mdComment);
+</details>
+`;
+    if (outputFile) {
+      fs.writeFile(outputFile, mdComment, err => {
+        if (err) {
+          throw err
+        } else {
+          console.log(`Successfully wrote gitops coverage markdown to ${outputFile}`);
+        }
+      });
+    } else {
+      console.log(mdComment);
+    }
   });
 
   rl.on("error", (err) => {

@@ -1,0 +1,8 @@
+deploy/
+Dockerfile
+node_modules/
+README.md
+example.png
+.git
+.gitignore
+LICENSE
