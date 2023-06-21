@@ -6,6 +6,8 @@ RUN adduser --disabled-password --uid 10000 service service
 # Create build directory and switch to unprivileged user
 WORKDIR /usr/src/service
 RUN chown service:service .
+
+# Switch to non-root user
 USER service:service
 
 # Cache and install dependencies before loading code
