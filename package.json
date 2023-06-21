@@ -1,0 +1,19 @@
+{
+  "name": "gitops-coverage",
+  "version": "1.0.0",
+  "description": "Generates GitHub Markdown comments summarizing code coverage reports",
+  "main": "create-markdown.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pauwels-labs/gitops-coverage.git"
+  },
+  "author": "Alexandre Pauwels",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/pauwels-labs/gitops-coverage/issues"
+  },
+  "homepage": "https://github.com/pauwels-labs/gitops-coverage#readme"
+}
