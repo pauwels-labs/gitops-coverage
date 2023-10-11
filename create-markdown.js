@@ -22,9 +22,14 @@ projectPath.replace(/\/+$/, "");
 let outputFile = process.env["GITOPS_COVERAGE_OUTPUT_FILE"];
 
 // Load the json summary into native JSON
-let jsonSummary = Object.fromEntries(
-  Object.entries(require(jsonSummaryFilePath)).map(([k, v]) => [k.replace(projectPath + "/", ""), v])
-);
+let jsonSummary = {};
+try {
+  jsonSummary = Object.fromEntries(
+    Object.entries(require(jsonSummaryFilePath)).map(([k, v]) => [k.replace(projectPath + "/", ""), v])
+  );
+} catch (error) {
+  console.log("Could not load a JSON summary file, skipping and creating from scratch");
+}
 
 try {
   // Abandon if the lcov info file doesn't exist
