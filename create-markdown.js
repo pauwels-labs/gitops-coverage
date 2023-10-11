@@ -84,6 +84,9 @@ try {
       if (uncoveredEnd != uncoveredBeginning) {
         uncoveredString += `-${uncoveredEnd}`;
       }
+      if (!jsonSummary[filename]) {
+        jsonSummary[filename] = {}
+      }
       if (!jsonSummary[filename].uncovered) {
         jsonSummary[filename].uncovered = [];
       }
