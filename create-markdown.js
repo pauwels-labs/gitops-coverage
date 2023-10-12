@@ -23,12 +23,14 @@ let outputFile = process.env["GITOPS_COVERAGE_OUTPUT_FILE"];
 
 // Load the json summary into native JSON
 let jsonSummary = {};
+let haveSummary = true;
 try {
   jsonSummary = Object.fromEntries(
     Object.entries(require(jsonSummaryFilePath)).map(([k, v]) => [k.replace(projectPath + "/", ""), v])
   );
 } catch (error) {
   console.log("Could not load a JSON summary file, skipping and creating from scratch");
+  haveSummary = false;
 }
 
 try {
@@ -57,13 +59,65 @@ try {
   rl.on("line", (line) => {
     // Regexes for the identifying the type of line
     const reSF = /^SF:(.+)$/m;
-    const reDA = /^DA:([0-9]+),0$/m;
+    const reLF = /^LF:(\d+)$/m;
+    const reDAUncovered = /^DA:(\d+),0$/m;
+    const reDACovered = /^DA:(\d+),1$/m;
     const filenameMatches = line.match(reSF);
-    const uncoveredMatches = line.match(reDA);
+    const lineCountMatches = line.match(reLF);
+    const uncoveredMatches = line.match(reDAUncovered);
+    const coveredMatches = line.match(reDACovered);
 
     // If this is a filename line, record the name of the file being analyzed
     if (filenameMatches && filenameMatches.length == 2) {
-      filename = filenameMatches[1];
+      filename = filenameMatches[1].replace(projectPath + "/", "");
+
+      // If we were not given a JSON summary, generate a blank one to add to
+      if (!jsonSummary[filename]) {
+        jsonSummary[filename] = {};
+      }
+      if (!jsonSummary[filename].lines) {
+        jsonSummary[filename].lines = {
+          total: 0,
+          covered: 0,
+          skipped: 0,
+          pct: 0
+        };
+      }
+      if (!jsonSummary[filename].functions) {
+        jsonSummary[filename].functions = {
+          total: 0,
+          covered: 0,
+          skipped: 0,
+          pct: 0
+        };
+      }
+      if (!jsonSummary[filename].statements) {
+        jsonSummary[filename].statements = {
+          total: 0,
+          covered: 0,
+          skipped: 0,
+          pct: 0
+        };
+      }
+      if (!jsonSummary[filename].branches) {
+        jsonSummary[filename].branches = {
+          total: 0,
+          covered: 0,
+          skipped: 0,
+          pct: 0
+        };
+      }
+    }
+    // If this is a line count line, record the total line count if
+    // we were not given a JSON summary
+    else if (lineCountMatches && lineCountMatches.length == 2 && !haveSummary) {
+      jsonSummary[filename].lines.total = parseInt(lineCountMatches[1]);
+      jsonSummary[filename].lines.pct = jsonSummary[filename].lines.total == 0 ? 0 : Math.round(((jsonSummary[filename].lines.covered / jsonSummary[filename].lines.total) + Number.EPSILON) * 10000) / 100;
+    }
+    // If this is a line identifying a covered line of code, record an additional covered
+    // line if we were not given a JSON summary
+    else if (coveredMatches && coveredMatches.length == 2 && !haveSummary) {
+      jsonSummary[filename].lines.covered += 1;
     }
     // If this is a line identifying that a line of code is uncovered and we are
     // not currently recording a range of uncovered lines, begin the range recording
@@ -83,9 +137,6 @@ try {
       let uncoveredString = `${uncoveredBeginning}`;
       if (uncoveredEnd != uncoveredBeginning) {
         uncoveredString += `-${uncoveredEnd}`;
-      }
-      if (!jsonSummary[filename]) {
-        jsonSummary[filename] = {}
       }
       if (!jsonSummary[filename].uncovered) {
         jsonSummary[filename].uncovered = [];
@@ -185,28 +236,37 @@ function buildTable(total, files) {
 
 // Recursively builds the markdown table containing all code coverage statistics
 function buildTableDepth(total, files, depth) {
+  // Define our table string
+  let table = "";
+
   // If depth hasn't been defined or is set to 0, set it to 1 to indicate the start
   if (typeof depth != "number" || depth <= 0) {
     depth = 1;
-  }
 
-  // Define our table string
-  let table = "";
+    // Set table header
+    if (haveSummary) {
+      table += `File|% Stmts|% Branch|% Funcs|% Lines|Uncovered Line #s
+----|-------|--------|-------|-------|-----------------
+`;
+    } else {
+      table += `File|% Lines|Uncovered Line #s
+----|-------|-----------------
+`;      
+    }
+  }
 
   // If a total summary object has been provided, add the table header and total summary line
   // at the top of the table
   if (total) {
     const totalColored = addColorToStats(total);
-    table += `File|% Stmts|% Branch|% Funcs|% Lines|Uncovered Line #s
-----|-------|--------|-------|-------|-----------------
-![All files](https://img.shields.io/badge/All%20files-${totalColored.statements.color}?style=for-the-badge)|![${totalColored.statements.pct}](https://img.shields.io/badge/${totalColored.statements.pct}-${totalColored.statements.color}?style=for-the-badge)|![${totalColored.branches.pct}](https://img.shields.io/badge/${totalColored.branches.pct}-${totalColored.branches.color}?style=for-the-badge)|![${totalColored.functions.pct}](https://img.shields.io/badge/${totalColored.functions.pct}-${totalColored.functions.color}?style=for-the-badge)|![${totalColored.lines.pct}](https://img.shields.io/badge/${totalColored.lines.pct}-${totalColored.lines.color}?style=for-the-badge)|
+    table += `![All files](https://img.shields.io/badge/All%20files-${totalColored.statements.color}?style=for-the-badge)|![${totalColored.statements.pct}](https://img.shields.io/badge/${totalColored.statements.pct}-${totalColored.statements.color}?style=for-the-badge)|![${totalColored.branches.pct}](https://img.shields.io/badge/${totalColored.branches.pct}-${totalColored.branches.color}?style=for-the-badge)|![${totalColored.functions.pct}](https://img.shields.io/badge/${totalColored.functions.pct}-${totalColored.functions.color}?style=for-the-badge)|![${totalColored.lines.pct}](https://img.shields.io/badge/${totalColored.lines.pct}-${totalColored.lines.color}?style=for-the-badge)|
 `;
   }
 
   // Iterate through each entry in the files/folders, generating a row in the table for each
   for (const fileKey in files) {
     // Checks to see if the key is a js file or a directory
-    const isJsFileRe = /^.+\.js$/m;
+    const isJsFileRe = /^.+\.[a-z0-9]+$/m;
 
     // If this is a js file, write a row that contains all summary statistics for the coverage
     // of the individual file including individual uncovered lines
@@ -233,9 +293,14 @@ function buildTableDepth(total, files, depth) {
       // Replaces special characters in the file name for adding to the badge URL
       const fileKeyCharsReplaced = fileKey.replace(" ", "_").replace("-", "--");
 
-      // Generates the row for the file
-      table += `${indent}![${fileKey}](https://img.shields.io/badge/${fileKeyCharsReplaced}-${fileEntryColored.statements.color}?style=for-the-badge)|![${fileEntryColored.statements.pct}](https://img.shields.io/badge/${fileEntryColored.statements.pct}-${fileEntryColored.statements.color}?style=for-the-badge)|![${fileEntryColored.branches.pct}](https://img.shields.io/badge/${fileEntryColored.branches.pct}-${fileEntryColored.branches.color}?style=for-the-badge)|![${fileEntryColored.functions.pct}](https://img.shields.io/badge/${fileEntryColored.functions.pct}-${fileEntryColored.functions.color}?style=for-the-badge)|![${fileEntryColored.lines.pct}](https://img.shields.io/badge/${fileEntryColored.lines.pct}-${fileEntryColored.lines.color}?style=for-the-badge)|${uncoveredLines}
+      // Generates the row for the file if we have a full summary
+      if (haveSummary) {
+        table += `${indent}![${fileKey}](https://img.shields.io/badge/${fileKeyCharsReplaced}-${fileEntryColored.statements.color}?style=for-the-badge)|![${fileEntryColored.statements.pct}](https://img.shields.io/badge/${fileEntryColored.statements.pct}-${fileEntryColored.statements.color}?style=for-the-badge)|![${fileEntryColored.branches.pct}](https://img.shields.io/badge/${fileEntryColored.branches.pct}-${fileEntryColored.branches.color}?style=for-the-badge)|![${fileEntryColored.functions.pct}](https://img.shields.io/badge/${fileEntryColored.functions.pct}-${fileEntryColored.functions.color}?style=for-the-badge)|![${fileEntryColored.lines.pct}](https://img.shields.io/badge/${fileEntryColored.lines.pct}-${fileEntryColored.lines.color}?style=for-the-badge)|${uncoveredLines}
 `;
+      } else {
+        table += `${indent}![${fileKey}](https://img.shields.io/badge/${fileKeyCharsReplaced}-${fileEntryColored.lines.color}?style=for-the-badge)|![${fileEntryColored.lines.pct}](https://img.shields.io/badge/${fileEntryColored.lines.pct}-${fileEntryColored.lines.color}?style=for-the-badge)|${uncoveredLines}
+`;        
+      }
     } else {
       // Fetches all the files in the directory
       const fileEntry = files[fileKey];
@@ -254,9 +319,14 @@ function buildTableDepth(total, files, depth) {
       // Replaces special characters in the directory name for adding to the badge URL
       const fileKeyCharsReplaced = fileKey.replace(" ", "_").replace("-", "--");
 
-      // Generates the row for the directory
-      table += `${indent}![${fileKey}](https://img.shields.io/badge/${fileKeyCharsReplaced}-${sumsColored.statements.color}?style=for-the-badge)|![${sumsColored.statements.pct}](https://img.shields.io/badge/${sumsColored.statements.pct}-${sumsColored.statements.color}?style=for-the-badge)|![${sumsColored.branches.pct}](https://img.shields.io/badge/${sumsColored.branches.pct}-${sumsColored.branches.color}?style=for-the-badge)|![${sumsColored.functions.pct}](https://img.shields.io/badge/${sumsColored.functions.pct}-${sumsColored.functions.color}?style=for-the-badge)|![${sumsColored.lines.pct}](https://img.shields.io/badge/${sumsColored.lines.pct}-${sumsColored.lines.color}?style=for-the-badge)|
+      // Generates the row for the directory if we have a full summary
+      if (haveSummary) {
+        table += `${indent}![${fileKey}](https://img.shields.io/badge/${fileKeyCharsReplaced}-${sumsColored.statements.color}?style=for-the-badge)|![${sumsColored.statements.pct}](https://img.shields.io/badge/${sumsColored.statements.pct}-${sumsColored.statements.color}?style=for-the-badge)|![${sumsColored.branches.pct}](https://img.shields.io/badge/${sumsColored.branches.pct}-${sumsColored.branches.color}?style=for-the-badge)|![${sumsColored.functions.pct}](https://img.shields.io/badge/${sumsColored.functions.pct}-${sumsColored.functions.color}?style=for-the-badge)|![${sumsColored.lines.pct}](https://img.shields.io/badge/${sumsColored.lines.pct}-${sumsColored.lines.color}?style=for-the-badge)|
 `;
+      } else {
+        table += `${indent}![${fileKey}](https://img.shields.io/badge/${fileKeyCharsReplaced}-${sumsColored.lines.color}?style=for-the-badge)|![${sumsColored.lines.pct}](https://img.shields.io/badge/${sumsColored.lines.pct}-${sumsColored.lines.color}?style=for-the-badge)|
+`;        
+      }
 
       // Recursively adds rows for each file in the directory
       table += buildTableDepth(null, fileEntry, depth + 1);
@@ -296,7 +366,7 @@ function sumCoverage(obj, recurse) {
     }
   };
   for (const entryKey in obj) {
-    const isJsFileRe = /^.+\.js$/m;
+    const isJsFileRe = /^.+\.[a-z0-9]+$/m;
     if (entryKey.match(isJsFileRe)) {
       let entry = obj[entryKey];
       if (entry.lines) {
